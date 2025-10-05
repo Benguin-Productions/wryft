@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies (include dev deps for build)
-RUN npm ci
+RUN npm ci || npm install --no-audit --no-fund
 
 # Generate Prisma Client
 RUN npx prisma generate

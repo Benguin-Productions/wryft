@@ -1,17 +1,39 @@
 import { Search, Mail, Lock, X, Home, Bell, MessageCircle, User, Settings, SquarePen, MoreHorizontal } from 'lucide-react';
-import { apiMe, apiRegister, apiLogin, apiCreatePost, apiListPosts, apiGetUser, apiGetUserPosts } from './api';
-import { useEffect, useState, useCallback } from 'react';
+import { apiMe, apiRegister, apiLogin, apiCreatePost, apiListPosts, apiGetUser, apiGetUserPosts, apiUpdateMe, apiUploadAvatar, apiUploadBanner } from './api';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import loginImg from './login.png';
-import signupImg from './signup.png';
+import signupImg from './SignUp.png';
 import wryftLogo from './wryft.png';
 import defaultPfp from './default_pfp.png';
 import verifiedIcon from './verified.png';
+
+// Simple time-ago helper for timestamps
+function timeAgo(iso: string) {
+  const d = new Date(iso);
+  const diff = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (diff < 60) return `${diff}s`;
+  const m = Math.floor(diff / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  const days = Math.floor(h / 24);
+  if (days < 7) return `${days}d`;
+  return d.toLocaleDateString();
+}
 
 function App() {
   const [activeTab, setActiveTab] = useState('discover');
   const [view, setView] = useState<'home' | 'create' | 'login' | 'profile'>('home');
   const [token, setToken] = useState<string | null>(null);
   const [me, setMe] = useState<{ id: string; username: string; email: string; discriminator?: number } | null>(null);
+  // Invite help modal
+  const [showInviteInfo, setShowInviteInfo] = useState(false);
+  // Routing helpers
+  const location = useLocation();
+  const navigate = useNavigate();
+  // If visiting someone else's profile via /u/:username
+  const [routeUsername, setRouteUsername] = useState<string | null>(null);
   // Create form state
   const [cUsername, setCUsername] = useState('');
   const [cEmail, setCEmail] = useState('');
@@ -37,11 +59,37 @@ function App() {
   const [feedLoaded, setFeedLoaded] = useState(false);
 
   // Profile state
-  const [profileUser, setProfileUser] = useState<null | { id: string; username: string; discriminator?: number; bio?: string; createdAt: string }>(null);
+  const [profileUser, setProfileUser] = useState<
+    | null
+    | {
+        id: string;
+        username: string;
+        discriminator?: number;
+        bio?: string;
+        createdAt: string;
+        avatarUrl?: string;
+        bannerUrl?: string;
+      }
+  >(null);
   const [profilePosts, setProfilePosts] = useState<Array<{ id: string; content: string; createdAt: string; author: { id: string; username: string; discriminator?: number } }>>([]);
   const [profileNext, setProfileNext] = useState<string | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
+  // Edit profile modal state
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [bioDraft, setBioDraft] = useState('');
+  const [savingBio, setSavingBio] = useState(false);
+  const [saveBioError, setSaveBioError] = useState<string | null>(null);
+  // Profile editor previews (UI-only for now)
+  const [bannerPreview, setBannerPreview] = useState<string | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const bannerInputRef = useRef<HTMLInputElement | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
+  // Followers/Following modals (UI-only)
+  const [showFollowers, setShowFollowers] = useState(false);
+  const [showFollowing, setShowFollowing] = useState(false);
+  // Verified info modal (UI-only)
+  const [showVerifiedInfo, setShowVerifiedInfo] = useState(false);
 
   const fetchFeed = useCallback(async () => {
     try {
@@ -64,6 +112,30 @@ function App() {
     fetchFeed();
   }, [fetchFeed]);
 
+  // Map URL -> view state
+  useEffect(() => {
+    const path = location.pathname || '/';
+    if (path === '/' || path === '/discover') {
+      setView('home');
+      setActiveTab('discover');
+      setRouteUsername(null);
+    } else if (path === '/home') {
+      setView('home');
+      setActiveTab('discover');
+      setRouteUsername(null);
+    } else if (path === '/login') {
+      setView('login');
+      setRouteUsername(null);
+    } else if (path === '/signup') {
+      setView('create');
+      setRouteUsername(null);
+    } else if (path.startsWith('/u/')) {
+      const uname = decodeURIComponent(path.slice(3)) || '';
+      if (uname) setRouteUsername(uname);
+      setView('profile');
+    }
+  }, [location.pathname]);
+
   // Load my profile when switching to profile view
   useEffect(() => {
     async function loadProfile(u: string) {
@@ -82,10 +154,10 @@ function App() {
       }
     }
     if (view === 'profile') {
-      const uname = me?.username;
+      const uname = routeUsername || me?.username;
       if (uname) loadProfile(uname);
     }
-  }, [view, me]);
+  }, [view, me, routeUsername]);
 
   // Hide splash after 2s
   useEffect(() => {
@@ -340,7 +412,7 @@ function App() {
     <div className="h-screen overflow-hidden bg-[#0a0a0a] text-white">
       <div className="flex">
         {/* Left Sidebar */}
-        <div className="w-80 border-r border-gray-700 min-h-screen p-8 translate-x-[380px]">
+        <div className="w-80 border-r border-gray-700 min-h-screen p-8 translate-x-[300px]">
           {/* Logo */}
           <div className="mb-0">
             <img src={wryftLogo} alt="Wryft" className="h-24 w-auto relative top-0.5" />
@@ -354,13 +426,20 @@ function App() {
                 developers
               </h2>
               <div className="flex gap-2 mb-4">
-                <button className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-sm font-medium transition-colors" onClick={() => setView('create')}>
+                <button className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-sm font-medium transition-colors" onClick={() => navigate('/signup')}>
                   Create account
                 </button>
-                <button className="px-4 py-2 text-gray-300 hover:text-white text-sm font-medium transition-colors" onClick={() => setView('login')}>
+                <button className="px-4 py-2 text-gray-300 hover:text-white text-sm font-medium transition-colors" onClick={() => navigate('/login')}>
                   Sign in
                 </button>
               </div>
+              <button
+                type="button"
+                onClick={() => setShowInviteInfo(true)}
+                className="text-xs text-gray-400 hover:text-gray-200 underline underline-offset-2"
+              >
+                Where to get invite?
+              </button>
             </div>
           ) : (
             <div className="mb-6">
@@ -368,7 +447,7 @@ function App() {
                 <button
                   className={`flex items-center gap-4 py-2 ${view === 'home' ? 'text-white' : 'text-gray-300 hover:text-white transition-colors'}`}
                   onClick={() => {
-                    setView('home');
+                    navigate('/home');
                     setActiveTab('discover');
                   }}
                 >
@@ -390,7 +469,11 @@ function App() {
                 
                 <button
                   className={`flex items-center gap-4 py-2 ${view === 'profile' ? 'text-white' : 'text-gray-300 hover:text-white transition-colors'}`}
-                  onClick={() => setView('profile')}
+                  onClick={() => {
+                    const uname = me?.username;
+                    if (uname) navigate(`/u/${encodeURIComponent(uname)}`);
+                    else navigate('/login');
+                  }}
                 >
                   <User className="w-6 h-6" />
                   <span>Profile</span>
@@ -406,6 +489,8 @@ function App() {
               </button>
             </div>
           )}
+
+      
 
           {/* Profile Card (signed in) */}
           {token && (
@@ -444,32 +529,84 @@ function App() {
         </div>
 
         {/* Main Content Area */}
-        <div className="flex-1 px-[380px] h-screen overflow-y-auto no-scrollbar">
+        <div className="flex-1 px-[300px] h-screen overflow-y-auto no-scrollbar">
           {/* Content Area */}
           <div className="p-8 px-3">
             {view === 'profile' ? (
               <div>
-                {/* Profile Header */}
-                <div className="pb-6 border-b border-gray-800">
-                  <div className="flex items-center gap-4">
-                    <img src={defaultPfp} alt="Profile" className="h-16 w-16 rounded-full object-cover" />
-                    <div>
-                      <div className="text-xl font-semibold text-white flex items-center gap-2">
-                        <span>{profileUser?.username || me?.username}</span>
-                        {((profileUser?.username === 'benguin' && profileUser?.discriminator === 1) || (profileUser == null && me?.username === 'benguin' && me?.discriminator === 1)) && (
-                          <img src={verifiedIcon} alt="Verified" className="h-5 w-5 inline-block align-text-top" />
-                        )}
+                {/* Profile Header with banner and actions */}
+                <div className="border-b border-gray-800">
+                  {/* Banner */}
+                  <div className="h-32 w-full rounded-xl overflow-hidden bg-gradient-to-r from-purple-900/40 via-purple-700/20 to-transparent">
+                    {profileUser?.bannerUrl && (
+                      <img src={profileUser.bannerUrl} alt="Banner" className="w-full h-full object-cover" />
+                    )}
+                  </div>
+                  {/* Avatar + Title Row */}
+                  <div className="flex items-start justify-between -mt-8 px-1">
+                    <div className="flex items-center gap-4">
+                      <img src={profileUser?.avatarUrl || defaultPfp} alt="Profile" className="h-24 w-24 rounded-full object-cover ring-2 ring-[#0a0a0a]" />
+                      <div>
+                        <div className="text-2xl font-semibold text-white flex items-center gap-2">
+                          <span>{profileUser?.username || me?.username}</span>
+                          {((profileUser?.username === 'benguin' && profileUser?.discriminator === 1) || (profileUser == null && me?.username === 'benguin' && me?.discriminator === 1)) && (
+                            <button type="button" aria-label="Verified badge info" onClick={() => setShowVerifiedInfo(true)} className="inline-flex items-center">
+                              <img src={verifiedIcon} alt="Verified" className="h-5 w-5 inline-block align-text-top" />
+                            </button>
+                          )}
+                        </div>
+                        <div className="text-gray-400 text-sm">
+                          @{(profileUser?.username || me?.username) || 'user'}
+                          {typeof (profileUser?.discriminator ?? me?.discriminator) === 'number' ? `#${String(profileUser?.discriminator ?? me?.discriminator).padStart(4,'0')}` : ''}
+                        </div>
                       </div>
-                      <div className="text-gray-400 text-sm">@
-                        {(profileUser?.username || me?.username) || 'user'}
-                        {typeof (profileUser?.discriminator ?? me?.discriminator) === 'number' ? `#${String(profileUser?.discriminator ?? me?.discriminator).padStart(4,'0')}` : ''}
+                    </div>
+                    {/* Actions */}
+                    <div className="pt-4">
+                      {(profileUser == null || profileUser?.username === me?.username) ? (
+                        <button
+                          className="px-4 py-2 rounded-lg bg-black/40 border border-gray-800 hover:border-gray-700 text-sm"
+                          onClick={() => {
+                            setSaveBioError(null);
+                            setBioDraft(profileUser?.bio || '');
+                            setBannerPreview(profileUser?.bannerUrl || null);
+                            setAvatarPreview(profileUser?.avatarUrl || null);
+                            setShowEditProfile(true);
+                          }}
+                        >
+                          Edit profile
+                        </button>
+                      ) : (
+                        <button className="px-4 py-2 rounded-lg bg-purple-700 hover:bg-purple-600 text-sm">Follow</button>
+                      )}
+                    </div>
+                  </div>
+                  {/* Bio + Meta */}
+                  <div className="mt-3 px-1 pb-4">
+                    {profileUser?.bio && (
+                      <div className="text-gray-300 text-sm mt-1 whitespace-pre-wrap">{profileUser.bio}</div>
+                    )}
+                    {profileUser?.createdAt && (
+                      <div className="text-gray-500 text-xs mt-2">Joined {new Date(profileUser.createdAt).toLocaleString(undefined, { month: 'short', year: 'numeric' })}</div>
+                    )}
+                    {/* Stats */}
+                    <div className="flex items-center gap-4 mt-3 text-sm">
+                      <div className="text-gray-300"><span className="font-semibold text-white">{profilePosts.length}</span> Posts</div>
+                      <button type="button" className="text-gray-500 hover:text-gray-300 underline underline-offset-2 cursor-pointer" onClick={() => setShowFollowing(true)} aria-label="View following list">
+                        0 Following
+                      </button>
+                      <button type="button" className="text-gray-500 hover:text-gray-300 underline underline-offset-2 cursor-pointer" onClick={() => setShowFollowers(true)} aria-label="View followers list">
+                        0 Followers
+                      </button>
+                    </div>
+                    {/* Tabs */}
+                    <div className="mt-4 border-b border-gray-800">
+                      <div className="flex items-center gap-6">
+                        <button className="px-4 py-3 border-b-2 border-purple-500 text-white text-sm">Posts</button>
+                        <button className="px-4 py-3 text-gray-400 text-sm">Replies</button>
+                        <button className="px-4 py-3 text-gray-400 text-sm">Media</button>
+                        <button className="px-4 py-3 text-gray-400 text-sm">Likes</button>
                       </div>
-                      {profileUser?.bio && (
-                        <div className="text-gray-300 text-sm mt-1 whitespace-pre-wrap">{profileUser.bio}</div>
-                      )}
-                      {profileUser?.createdAt && (
-                        <div className="text-gray-500 text-xs mt-1">Joined {new Date(profileUser.createdAt).toLocaleString(undefined, { month: 'short', year: 'numeric' })}</div>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -490,11 +627,13 @@ function App() {
                           <span className="font-semibold text-white flex items-center gap-1">
                         <span>{p.author.username}</span>
                         {p.author.username === 'benguin' && typeof p.author.discriminator === 'number' && p.author.discriminator === 1 && (
-                          <img src={verifiedIcon} alt="Verified" className="h-4 w-4 inline-block align-text-top" />
+                          <button type="button" aria-label="Verified badge info" onClick={() => setShowVerifiedInfo(true)} className="inline-flex items-center">
+                            <img src={verifiedIcon} alt="Verified" className="h-4 w-4 inline-block align-text-top" />
+                          </button>
                         )}
                       </span>
                           <span className="text-gray-500">@{p.author.username}{typeof p.author.discriminator === 'number' ? `#${String(p.author.discriminator).padStart(4, '0')}` : ''}</span>
-                          <span className="text-gray-600">• {new Date(p.createdAt).toLocaleString()}</span>
+                          <span className="text-gray-600">• {timeAgo(p.createdAt)}</span>
                         </div>
                         <div className="mt-1 text-[15px] leading-6 text-gray-200 whitespace-pre-wrap">{p.content}</div>
                       </div>
@@ -572,7 +711,7 @@ function App() {
                     <div className="flex items-center gap-2 text-sm">
                       <span className="font-semibold text-white">{p.author.username}</span>
                       <span className="text-gray-500">@{p.author.username}{typeof p.author.discriminator === 'number' ? `#${String(p.author.discriminator).padStart(4, '0')}` : ''}</span>
-                      <span className="text-gray-600">• {new Date(p.createdAt).toLocaleString()}</span>
+                      <span className="text-gray-600">• {timeAgo(p.createdAt)}</span>
                     </div>
                     <div className="mt-1 text-[15px] leading-6 text-gray-200 whitespace-pre-wrap">{p.content}</div>
                   </div>
@@ -588,7 +727,7 @@ function App() {
       </div>
 
         {/* Right Sidebar - Search */}
-        <div className="w-80 border-l border-gray-700 p-6 -translate-x-[380px]">
+        <div className="w-80 border-l border-gray-700 p-6 -translate-x-[300px]">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
             <input
@@ -652,6 +791,270 @@ function App() {
                 >
                   Post
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invite Info Modal */}
+      {showInviteInfo && (
+        <div className="fixed inset-0 z-[55]">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowInviteInfo(false)} />
+          <div className="absolute inset-0 flex items-center justify-center p-4" onClick={() => setShowInviteInfo(false)}>
+            <div
+              className="relative w-full max-w-md rounded-2xl bg-[#0b0b0b] border border-[#1b1b1b] shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                aria-label="Close"
+                className="absolute right-3 top-3 text-gray-400 hover:text-white"
+                onClick={() => setShowInviteInfo(false)}
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <div className="p-5">
+                <h3 className="text-lg font-semibold mb-3">Getting an invite</h3>
+                <p className="text-sm text-gray-300">To get an invite you have to have good contact with one of the owners of the site.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Profile Modal (root-level overlay) */}
+      {showEditProfile && (
+        <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowEditProfile(false)} />
+          <div className="absolute inset-0 flex items-center justify-center p-4" onClick={() => setShowEditProfile(false)}>
+            <div className="relative w-full max-w-2xl rounded-2xl bg-[#0b0b0b] border border-[#1b1b1b] shadow-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              {/* Header */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-[#1b1b1b]">
+                <div className="flex items-center gap-2">
+                  <button aria-label="Close" className="text-gray-300 hover:text-white" onClick={() => setShowEditProfile(false)}>
+                    <X className="w-5 h-5" />
+                  </button>
+                  <h3 className="text-base font-semibold">Edit profile</h3>
+                </div>
+                <button
+                  className="px-4 py-1.5 rounded-full bg-purple-700 hover:bg-purple-600 text-sm"
+                  disabled={savingBio || !token}
+                  onClick={async () => {
+                    if (!token) return;
+                    try {
+                      setSavingBio(true);
+                      setSaveBioError(null);
+                      // Upload images if new data URLs selected
+                      let current = null as any;
+                      if (bannerPreview && bannerPreview.startsWith('data:')) {
+                        current = await apiUploadBanner(token, bannerPreview);
+                      }
+                      if (avatarPreview && avatarPreview.startsWith('data:')) {
+                        current = await apiUploadAvatar(token, avatarPreview);
+                      }
+                      const updated = await apiUpdateMe(token, { bio: bioDraft.trim() || undefined });
+                      const merged = current ? { ...updated, ...current } : updated;
+                      setProfileUser((prev) => (prev ? { ...prev, bio: merged.bio, avatarUrl: merged.avatarUrl ?? prev.avatarUrl, bannerUrl: merged.bannerUrl ?? prev.bannerUrl } : prev));
+                      setShowEditProfile(false);
+                    } catch (e: any) {
+                      setSaveBioError(e?.message || 'Failed to save');
+                    } finally {
+                      setSavingBio(false);
+                    }
+                  }}
+                >
+                  {savingBio ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+
+              {/* Banner area */}
+              <div className="relative h-40 sm:h-48 bg-[#111]">
+                {/* Preview or placeholder */}
+                {bannerPreview ? (
+                  <img src={bannerPreview} alt="Banner preview" className="absolute inset-0 w-full h-full object-cover" />
+                ) : (
+                  <div className="absolute inset-0 bg-gradient-to-r from-purple-900/40 via-purple-700/20 to-transparent" />
+                )}
+                {/* Controls */}
+                <div className="absolute right-3 bottom-3 flex gap-2">
+                  <button
+                    className="h-9 w-9 rounded-full bg-black/60 text-gray-100 flex items-center justify-center ring-1 ring-white/10 hover:bg-black/70"
+                    onClick={() => bannerInputRef.current?.click()}
+                    type="button"
+                    aria-label="Upload banner"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M12 5v14m7-7H5"/></svg>
+                  </button>
+                  {bannerPreview && (
+                    <button
+                      className="h-9 w-9 rounded-full bg-black/60 text-gray-100 flex items-center justify-center ring-1 ring-white/10 hover:bg-black/70"
+                      onClick={() => setBannerPreview(null)}
+                      type="button"
+                      aria-label="Remove banner"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                  )}
+                  <input
+                    ref={bannerInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = () => setBannerPreview(reader.result as string);
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                </div>
+
+                {/* Avatar overlay */}
+                <div className="absolute -bottom-10 left-6">
+                  <div className="relative h-20 w-20 rounded-full ring-4 ring-[#0b0b0b] overflow-hidden bg-[#111]">
+                    <img src={avatarPreview || defaultPfp} alt="Avatar preview" className="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => avatarInputRef.current?.click()}
+                      className="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-90"
+                      aria-label="Upload avatar"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M12 5v14m7-7H5"/></svg>
+                    </button>
+                    {avatarPreview && (
+                      <button
+                        type="button"
+                        onClick={() => setAvatarPreview(null)}
+                        className="absolute -right-2 -top-2 h-6 w-6 rounded-full bg-black/70 text-white flex items-center justify-center"
+                        aria-label="Remove avatar"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M6 18L18 6M6 6l12 12"/></svg>
+                      </button>
+                    )}
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = () => setAvatarPreview(reader.result as string);
+                        reader.readAsDataURL(file);
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Form body */}
+              <div className="px-5 pt-14 pb-5">
+                {/* Name (read-only for now) */}
+                <label className="block text-xs text-gray-400 mb-1">Name</label>
+                <input
+                  value={profileUser?.username || me?.username || ''}
+                  readOnly
+                  className="w-full bg-[#121212] border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300"
+                />
+                {/* Bio */}
+                <label className="block text-xs text-gray-400 mt-4 mb-1">Bio (max 280)</label>
+                <textarea
+                  value={bioDraft}
+                  onChange={(e) => {
+                    const v = e.target.value.slice(0, 280);
+                    setBioDraft(v);
+                  }}
+                  placeholder="Tell people about yourself"
+                  className="w-full bg-[#121212] border border-gray-800 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-gray-700 min-h-[100px]"
+                />
+                <div className="mt-2 text-xs text-gray-500 flex items-center justify-between">
+                  <span>{bioDraft.length}/280</span>
+                  {saveBioError && <span className="text-red-400">{saveBioError}</span>}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Following Modal (UI only, centered) */}
+      {showFollowing && (
+        <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowFollowing(false)} />
+          <div className="absolute inset-0 flex items-center justify-center p-4" onClick={() => setShowFollowing(false)}>
+            <div className="relative w-full max-w-md rounded-2xl bg-[#0b0b0b] border border-[#1b1b1b] shadow-xl" onClick={(e) => e.stopPropagation()}>
+              <button aria-label="Close" className="absolute right-3 top-3 text-gray-400 hover:text-white" onClick={() => setShowFollowing(false)}>
+                <X className="w-5 h-5" />
+              </button>
+              <div className="p-5">
+                <h3 className="text-lg font-semibold mb-3">Following</h3>
+                <div className="text-sm text-gray-400">No following yet.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Followers Modal (UI only, centered) */}
+      {showFollowers && (
+        <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowFollowers(false)} />
+          <div className="absolute inset-0 flex items-center justify-center p-4" onClick={() => setShowFollowers(false)}>
+            <div className="relative w-full max-w-md rounded-2xl bg-[#0b0b0b] border border-[#1b1b1b] shadow-xl" onClick={(e) => e.stopPropagation()}>
+              <button aria-label="Close" className="absolute right-3 top-3 text-gray-400 hover:text-white" onClick={() => setShowFollowers(false)}>
+                <X className="w-5 h-5" />
+              </button>
+              <div className="p-5">
+                <h3 className="text-lg font-semibold mb-3">Followers</h3>
+                <div className="text-sm text-gray-400">No followers yet.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Verified Info Modal (UI only, centered) */}
+      {showVerifiedInfo && (
+        <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowVerifiedInfo(false)} />
+          <div className="absolute inset-0 flex items-center justify-center p-4" onClick={() => setShowVerifiedInfo(false)}>
+            <div className="relative w-full max-w-md rounded-2xl bg-[#0b0b0b] border border-[#1b1b1b] shadow-xl" onClick={(e) => e.stopPropagation()}>
+              <button aria-label="Close" className="absolute right-3 top-3 text-gray-400 hover:text-white" onClick={() => setShowVerifiedInfo(false)}>
+                <X className="w-5 h-5" />
+              </button>
+              <div className="p-5">
+                <h3 className="text-lg font-semibold mb-1">This account is verified</h3>
+                <p className="text-sm text-gray-300 mb-4">This account has a checkmark because it has been verified by trusted sources.</p>
+                <div className="text-xs text-gray-400 mb-2">Verified by:</div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigate('/u/wryft');
+                    setShowVerifiedInfo(false);
+                  }}
+                  className="w-full text-left"
+                >
+                  <div className="flex items-center gap-3 rounded-lg border border-gray-800 bg-black/20 px-3 py-2 hover:border-gray-700 transition-colors">
+                    <img src={wryftLogo} alt="Wryft" className="h-8 w-8 rounded" />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-1 text-sm text-white font-semibold">
+                        wryft <img src={verifiedIcon} alt="Verified" className="h-4 w-4 inline-block" />
+                      </div>
+                      <div className="text-xs text-gray-500">@wryft#0001</div>
+                    </div>
+                    <span className="text-xs text-gray-500">View profile →</span>
+                  </div>
+                </button>
+                <div className="mt-4 flex justify-end gap-2">
+                  <button className="px-4 py-2 rounded-lg bg-black/40 border border-gray-800 text-sm text-gray-300 cursor-not-allowed" disabled>
+                    Learn more
+                  </button>
+                  <button className="px-4 py-2 rounded-lg bg-purple-700 hover:bg-purple-600 text-sm" onClick={() => setShowVerifiedInfo(false)}>
+                    Close
+                  </button>
+                </div>
               </div>
             </div>
           </div>

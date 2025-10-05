@@ -50,7 +50,7 @@ router.get('/me', requireAuth, async (req: any, res, next) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.userId },
-      select: { id: true, username: true, email: true, discriminator: true }
+      select: { id: true, username: true, email: true, discriminator: true, avatarUrl: true, bannerUrl: true }
     });
     if (!user) return res.status(404).json({ error: 'User not found' });
     const verified = user.username === 'benguin' && user.discriminator === 1;

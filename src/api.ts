@@ -1,4 +1,9 @@
-const BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:4000';
+// Resolve API base URL with safety:
+// - In production (non-localhost), always use same-origin so Nginx proxies /api -> backend.
+// - In local dev (localhost), allow VITE_API_URL override, defaulting to http://localhost:4000.
+const ENV_URL = (import.meta as any).env?.VITE_API_URL as string | undefined;
+const isLocalhost = typeof window !== 'undefined' && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(window.location.hostname);
+const BASE_URL = isLocalhost ? (ENV_URL || 'http://localhost:4000') : '';
 
 export async function apiRegister(data: { username: string; email: string; password: string; inviteCode: string }) {
   const res = await fetch(`${BASE_URL}/api/auth/register`, {
@@ -65,5 +70,44 @@ export async function apiListPosts(params?: { limit?: number; cursor?: string })
   q.set('_ts', String(Date.now()));
   const res = await fetch(`${BASE_URL}/api/posts${q.toString() ? `?${q}` : ''}`, { cache: 'no-store' });
   if (!res.ok) throw new Error('Fetch posts failed');
+  return res.json();
+}
+
+export async function apiUpdateMe(token: string, data: { bio?: string }) {
+  const res = await fetch(`${BASE_URL}/api/users/me`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error((await res.json()).error || 'Update profile failed');
+  return res.json();
+}
+
+export async function apiUploadAvatar(token: string, dataUrl: string) {
+  const res = await fetch(`${BASE_URL}/api/users/me/avatar`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ dataUrl }),
+  });
+  if (!res.ok) throw new Error((await res.json()).error || 'Upload avatar failed');
+  return res.json();
+}
+
+export async function apiUploadBanner(token: string, dataUrl: string) {
+  const res = await fetch(`${BASE_URL}/api/users/me/banner`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ dataUrl }),
+  });
+  if (!res.ok) throw new Error((await res.json()).error || 'Upload banner failed');
   return res.json();
 }

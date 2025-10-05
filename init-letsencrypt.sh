@@ -16,8 +16,7 @@ EMAIL="admin@$DOMAIN"  # Change this to your email
 # Create necessary directories
 mkdir -p certbot/conf certbot/www
 
-# Stop any running nginx containers
-docker-compose -f docker-compose.prod.yml stop nginx
+echo "Using webroot challenge. Ensure nginx is RUNNING and serving /.well-known/acme-challenge/ from /var/www/certbot on port 80."
 
 # Get SSL certificate
 docker run -it --rm \
@@ -31,9 +30,6 @@ docker run -it --rm \
     -d $DOMAIN \
     -d www.$DOMAIN \
     --force-renewal
-
-# Start nginx
-docker-compose -f docker-compose.prod.yml up -d nginx
 
 echo "SSL certificate for $DOMAIN has been created successfully!"
 echo "Your site is now being served over HTTPS at https://$DOMAIN"
