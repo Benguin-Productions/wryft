@@ -5,6 +5,7 @@ import cors from 'cors';
 import authRouter from './routes/auth';
 import postsRouter from './routes/posts';
 import usersRouter from './routes/users';
+import { pingRedis } from './shared/redis';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -14,8 +15,9 @@ app.use(express.json());
 // Serve static assets (e.g., badge icons) from server/public
 app.use('/static', express.static(path.join(__dirname, '..', 'public')));
 
-app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, service: 'wryft-server' });
+app.get('/api/health', async (_req, res) => {
+  const redisOk = await pingRedis().catch(() => false);
+  res.json({ ok: true, service: 'wryft-server', redis: redisOk ? 'up' : 'down' });
 });
 
 app.use('/api/auth', authRouter);

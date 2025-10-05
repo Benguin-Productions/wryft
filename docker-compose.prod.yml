@@ -19,6 +19,21 @@ services:
     networks:
       - app-network
 
+  # Redis cache
+  redis:
+    image: redis:7-alpine
+    restart: always
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - app-network
+
   # Backend API
   server:
     build:
@@ -28,11 +43,14 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}?schema=public
       JWT_SECRET: ${JWT_SECRET}
       API_URL: /api
+      REDIS_URL: redis://redis:6379
     networks:
       - app-network
     # No bind mounts in production; use the built image
@@ -71,3 +89,4 @@ networks:
 
 volumes:
   postgres_data:
+  redis_data:

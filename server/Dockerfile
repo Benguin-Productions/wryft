@@ -1,5 +1,5 @@
-# Use Node.js LTS
-FROM node:20-alpine
+# Use Node.js LTS (Debian-based for glibc + OpenSSL)
+FROM node:20-bookworm-slim
 
 # Create app directory
 WORKDIR /usr/src/app
@@ -7,6 +7,11 @@ WORKDIR /usr/src/app
 # Copy package files
 COPY package*.json ./
 COPY prisma ./prisma/
+
+# System deps needed for Prisma engines (OpenSSL)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies (include dev deps for build)
 RUN npm ci
