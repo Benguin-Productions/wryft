@@ -66,7 +66,14 @@ npm run dev
 Vite runs at `http://localhost:5173` by default.
 
 ### 1.6 Invite-only registration
-Registration requires an invite code. Set `INVITE_CODE` in `server/.env`, then when registering in the UI, provide that code.
+Registration requires an invite code. Codes are stored in the database (`InviteCode` table). Create one via Prisma Studio or SQL:
+
+```bash
+cd server
+npx prisma studio # add a row in InviteCode
+# or
+echo "INSERT INTO InviteCode (id, code, maxUses, uses, expiresAt, createdAt, disabled) VALUES (lower(hex(randomblob(16))), 'wryft-for-zshadow', 10, 0, NULL, datetime('now'), 0);" | npx prisma db execute --stdin
+```
 
 ### 1.7 Useful server endpoints
 - Health: `GET /api/health`
@@ -91,11 +98,17 @@ fetch('http://localhost:4000/api/posts', {
 
 ---
 
-## 2) Ubuntu VPS Deployment (Node + PM2 + Nginx)
+## 2) Ubuntu VPS Deployment (Node + PM2 + Nginx) — with your custom domain
 
 Assumptions:
-- Domain points to your server (A record)
+- You have a domain you control
 - You’ll serve client on `:5173` (or built and served statically) and API on `:4000`. Recommended: proxy both behind Nginx.
+
+### 2.0 Point your domain to the VPS
+- Create an A record at your DNS provider:
+  - Host: `@` (root) or `app`
+  - Value: your VPS public IP (e.g., `203.0.113.10`)
+- Wait for DNS to propagate (often a few minutes, up to an hour).
 
 ### 2.1 Install dependencies
 ```bash
@@ -174,7 +187,7 @@ npm run build
 ```
 You can serve `dist/` with Nginx directly (recommended for prod), or continue with the dev server via PM2 for quick testing.
 
-### 2.7 Nginx reverse proxy
+### 2.7 Nginx reverse proxy (custom domain)
 Create `/etc/nginx/sites-available/wryft`:
 ```nginx
 server {
@@ -210,6 +223,18 @@ sudo systemctl reload nginx
 ```bash
 sudo apt install -y certbot python3-certbot-nginx
 sudo certbot --nginx -d your-domain.com
+```
+
+### 2.9 Point the client to your custom domain
+In production, the client should call the API at your domain. Create/update `/.env` at repo root:
+```env
+VITE_API_URL=https://your-domain.com
+```
+Rebuild the client and re-load Nginx:
+```bash
+cd /var/www/wryft
+npm run build
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
 ### 2.9 Update & logs
