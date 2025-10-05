@@ -26,7 +26,10 @@ function App() {
   const [activeTab, setActiveTab] = useState('discover');
   const [view, setView] = useState<'home' | 'create' | 'login' | 'profile'>('home');
   const [token, setToken] = useState<string | null>(null);
-  const [me, setMe] = useState<{ id: string; username: string; email: string; discriminator?: number } | null>(null);
+  const [me, setMe] = useState<
+    | null
+    | { id: string; username: string; email: string; discriminator?: number; avatarUrl?: string; bannerUrl?: string }
+  >(null);
   // Invite help modal
   const [showInviteInfo, setShowInviteInfo] = useState(false);
   // Routing helpers
@@ -52,7 +55,9 @@ function App() {
   // Splash screen
   const [showSplash, setShowSplash] = useState(true);
   // Feed state
-  const [posts, setPosts] = useState<Array<{ id: string; content: string; createdAt: string; author: { id: string; username: string; discriminator?: number } }>>([]);
+  const [posts, setPosts] = useState<
+    Array<{ id: string; content: string; createdAt: string; author: { id: string; username: string; discriminator?: number; avatarUrl?: string } }>
+  >([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingFeed, setLoadingFeed] = useState(false);
   const [feedError, setFeedError] = useState<string | null>(null);
@@ -71,7 +76,9 @@ function App() {
         bannerUrl?: string;
       }
   >(null);
-  const [profilePosts, setProfilePosts] = useState<Array<{ id: string; content: string; createdAt: string; author: { id: string; username: string; discriminator?: number } }>>([]);
+  const [profilePosts, setProfilePosts] = useState<
+    Array<{ id: string; content: string; createdAt: string; author: { id: string; username: string; discriminator?: number; avatarUrl?: string } }>
+  >([]);
   const [profileNext, setProfileNext] = useState<string | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -498,7 +505,12 @@ function App() {
               <div className="flex items-center justify-between">
                 {/* Avatar */}
                 <div className="flex items-center gap-3">
-                  <img src={defaultPfp} alt="Profile" className="h-10 w-10 rounded-full object-cover" />
+                  <img
+                    src={me?.avatarUrl || defaultPfp}
+                    onError={(e) => (e.currentTarget.src = defaultPfp)}
+                    alt="Profile"
+                    className="h-10 w-10 rounded-full object-cover"
+                  />
                   <div className="leading-tight">
                     <div className="text-white font-semibold flex items-center gap-1">
                       <span>{me?.username || 'User'}</span>
@@ -545,7 +557,12 @@ function App() {
                   {/* Avatar + Title Row */}
                   <div className="flex items-start justify-between -mt-8 px-1">
                     <div className="flex items-center gap-4">
-                      <img src={profileUser?.avatarUrl || defaultPfp} alt="Profile" className="h-24 w-24 rounded-full object-cover ring-2 ring-[#0a0a0a]" />
+                      <img
+                        src={profileUser?.avatarUrl || defaultPfp}
+                        onError={(e) => (e.currentTarget.src = defaultPfp)}
+                        alt="Profile"
+                        className="h-24 w-24 rounded-full object-cover ring-2 ring-[#0a0a0a]"
+                      />
                       <div>
                         <div className="text-2xl font-semibold text-white flex items-center gap-2">
                           <span>{profileUser?.username || me?.username}</span>
@@ -621,7 +638,12 @@ function App() {
                   )}
                   {profilePosts.map((p) => (
                     <div key={p.id} className="py-5 flex gap-4">
-                      <img src={defaultPfp} alt="Profile" className="h-9 w-9 rounded-full object-cover" />
+                      <img
+                        src={p.author.avatarUrl || defaultPfp}
+                        onError={(e) => (e.currentTarget.src = defaultPfp)}
+                        alt="Profile"
+                        className="h-9 w-9 rounded-full object-cover"
+                      />
                       <div className="flex-1">
                         <div className="flex items-center gap-2 text-sm">
                           <span className="font-semibold text-white flex items-center gap-1">
@@ -706,7 +728,12 @@ function App() {
               )}
               {posts.map((p) => (
                 <div key={p.id} className="py-5 flex gap-4">
-                  <img src={defaultPfp} alt="Profile" className="h-9 w-9 rounded-full object-cover" />
+                  <img
+                    src={p.author.avatarUrl || defaultPfp}
+                    onError={(e) => (e.currentTarget.src = defaultPfp)}
+                    alt="Profile"
+                    className="h-9 w-9 rounded-full object-cover"
+                  />
                   <div className="flex-1">
                     <div className="flex items-center gap-2 text-sm">
                       <span className="font-semibold text-white">{p.author.username}</span>
@@ -774,7 +801,13 @@ function App() {
                     if (!token) return;
                     const created = await apiCreatePost(token, { content: postText.trim() });
                     console.log('Created post', created?.id);
+                    // Optimistically prepend to home feed
                     setPosts((prev) => [created, ...prev]);
+                    // If currently viewing own profile, also prepend there
+                    setProfilePosts((prev) => {
+                      const isOwnProfile = view === 'profile' && (profileUser?.username || me?.username) === me?.username;
+                      return isOwnProfile ? [{ ...created, author: { ...created.author, avatarUrl: me?.avatarUrl } }, ...prev] : prev;
+                    });
                     // Refetch to keep cursor and ordering consistent
                     try {
                       const data = await apiListPosts({ limit: 20 });
