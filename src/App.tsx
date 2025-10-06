@@ -1,5 +1,5 @@
 import { Search, Mail, Lock, X, Home, Bell, MessageCircle, User, Settings, SquarePen, MoreHorizontal } from 'lucide-react';
-import { apiMe, apiRegister, apiLogin, apiCreatePost, apiListPosts, apiGetUser, apiGetUserPosts, apiUpdateMe, apiUploadAvatar, apiUploadBanner } from './api';
+import { apiMe, apiRegister, apiLogin, apiCreatePost, apiListPosts, apiGetUser, apiGetUserPosts, apiUpdateMe, apiUploadAvatar, apiUploadBanner, apiSearchUsers } from './api';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import loginImg from './login.png';
@@ -421,7 +421,7 @@ function App() {
     <div className="h-screen overflow-hidden bg-[#0a0a0a] text-white">
       <div className="flex">
         {/* Left Sidebar */}
-        <div className="w-80 border-r border-gray-700 min-h-screen p-8 translate-x-[300px]">
+        <div className="hidden lg:block w-80 border-r border-gray-700 min-h-screen p-8">
           {/* Logo */}
           <div className="mb-0">
             <img src={wryftLogo} alt="Wryft" className="h-24 w-auto relative top-0.5" />
@@ -452,9 +452,13 @@ function App() {
             </div>
           ) : (
             <div className="mb-6">
-              <nav className="space-y-4 text-lg">
+              <nav className="space-y-2 text-lg">
                 <button
-                  className={`flex items-center gap-4 py-2 ${view === 'home' ? 'text-white' : 'text-gray-300 hover:text-white transition-colors'}`}
+                  className={`flex items-center gap-4 py-2 px-3 -mx-3 rounded-full transition-colors ${
+                    view === 'home'
+                      ? 'text-white bg-white/5'
+                      : 'text-gray-300 hover:text-white hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-purple-500/30'
+                  }`}
                   onClick={() => {
                     navigate('/home');
                     setActiveTab('discover');
@@ -463,21 +467,25 @@ function App() {
                   <Home className="w-6 h-6" />
                   <span className="font-semibold">Home</span>
                 </button>
-                <button className="flex items-center gap-4 text-gray-300 hover:text-white transition-colors py-2">
+                <button className="flex items-center gap-4 py-2 px-3 -mx-3 rounded-full text-gray-300 hover:text-white hover:bg-white/5 transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500/30">
                   <Search className="w-6 h-6" />
                   <span>Explore</span>
                 </button>
-                <button className="flex items-center gap-4 text-gray-300 hover:text-white transition-colors py-2">
+                <button className="flex items-center gap-4 py-2 px-3 -mx-3 rounded-full text-gray-300 hover:text-white hover:bg-white/5 transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500/30">
                   <Bell className="w-6 h-6" />
                   <span>Notifications</span>
                 </button>
-                <button className="flex items-center gap-4 text-gray-300 hover:text-white transition-colors py-2">
+                <button className="flex items-center gap-4 py-2 px-3 -mx-3 rounded-full text-gray-300 hover:text-white hover:bg-white/5 transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500/30">
                   <MessageCircle className="w-6 h-6" />
                   <span>Chat</span>
                 </button>
                 
                 <button
-                  className={`flex items-center gap-4 py-2 ${view === 'profile' ? 'text-white' : 'text-gray-300 hover:text-white transition-colors'}`}
+                  className={`flex items-center gap-4 py-2 px-3 -mx-3 rounded-full transition-colors ${
+                    view === 'profile'
+                      ? 'text-white bg-white/5'
+                      : 'text-gray-300 hover:text-white hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-purple-500/30'
+                  }`}
                   onClick={() => {
                     const uname = me?.username;
                     if (uname) navigate(`/u/${encodeURIComponent(uname)}`);
@@ -487,7 +495,7 @@ function App() {
                   <User className="w-6 h-6" />
                   <span>Profile</span>
                 </button>
-                <button className="flex items-center gap-4 text-gray-300 hover:text-white transition-colors py-2">
+                <button className="flex items-center gap-4 py-2 px-3 -mx-3 rounded-full text-gray-300 hover:text-white hover:bg-white/5 transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500/30">
                   <Settings className="w-6 h-6" />
                   <span>Settings</span>
                 </button>
@@ -543,7 +551,7 @@ function App() {
         </div>
 
         {/* Main Content Area */}
-        <div className="flex-1 px-[300px] h-screen overflow-y-auto no-scrollbar">
+        <div className="flex-1 h-screen overflow-y-auto no-scrollbar px-4 sm:px-6 lg:px-8 max-w-3xl mx-auto">
           {/* Content Area */}
           <div className="p-8 px-3">
             {view === 'profile' ? (
@@ -695,27 +703,33 @@ function App() {
             <div>
             {/* Top Navigation (inside middle content) */}
             <div className="border-b border-gray-700">
-              <div className="flex items-center justify-center gap-6">
-                <button
-                  onClick={() => setActiveTab('discover')}
-                  className={`px-8 py-4 text-sm font-medium border-b-2 transition-colors ${
-                    activeTab === 'discover'
-                      ? 'border-purple-500 text-white'
-                      : 'border-transparent text-gray-400 hover:text-white'
-                  }`}
-                >
-                  Discover
-                </button>
-                <button
-                  onClick={() => setActiveTab('feeds')}
-                  className={`px-8 py-4 text-sm font-medium border-b-2 transition-colors ${
-                    activeTab === 'feeds'
-                      ? 'border-purple-500 text-white'
-                      : 'border-transparent text-gray-400 hover:text-white'
-                  }`}
-                >
-                  Feeds
-                </button>
+              <div className="flex items-center justify-center py-3">
+                <div role="tablist" aria-label="Feed tabs" className="inline-flex items-center gap-1 rounded-full bg-white/5 p-1 overflow-x-auto no-scrollbar">
+                  <button
+                    role="tab"
+                    aria-selected={activeTab === 'discover'}
+                    onClick={() => setActiveTab('discover')}
+                    className={`px-5 py-2 text-sm font-medium rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500/40 ${
+                      activeTab === 'discover'
+                        ? 'bg-purple-600/20 text-white shadow-[inset_0_0_0_1px_rgba(147,51,234,.4)]'
+                        : 'text-gray-300 hover:text-white hover:bg-white/10'
+                    }`}
+                  >
+                    Discover
+                  </button>
+                  <button
+                    role="tab"
+                    aria-selected={activeTab === 'feeds'}
+                    onClick={() => setActiveTab('feeds')}
+                    className={`px-5 py-2 text-sm font-medium rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500/40 ${
+                      activeTab === 'feeds'
+                        ? 'bg-purple-600/20 text-white shadow-[inset_0_0_0_1px_rgba(147,51,234,.4)]'
+                        : 'text-gray-300 hover:text-white hover:bg-white/10'
+                    }`}
+                  >
+                    Feeds
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -757,14 +771,36 @@ function App() {
       </div>
 
         {/* Right Sidebar - Search */}
-        <div className="w-80 border-l border-gray-700 p-6 -translate-x-[300px]">
+        <div className="hidden xl:block w-80 border-l border-gray-700 p-6">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
             <input
               type="text"
-              placeholder="Search"
+              placeholder="Search users"
               className="w-full bg-[#121212] border border-gray-800 rounded-lg pl-10 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-gray-700"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
             />
+          </div>
+          {/* Results */}
+          <div className="mt-3 space-y-2">
+            {searching && <div className="text-xs text-gray-500">Searching…</div>}
+            {!searching && searchResults.map((u) => (
+              <button
+                key={u.id}
+                className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 text-left"
+                onClick={() => navigate(`/u/${encodeURIComponent(u.username)}`)}
+              >
+                <img src={u.avatarUrl || defaultPfp} onError={(e) => (e.currentTarget.src = defaultPfp)} alt="Avatar" className="h-8 w-8 rounded-full object-cover" />
+                <div>
+                  <div className="text-sm text-white font-medium">{u.username}</div>
+                  <div className="text-xs text-gray-500">#{String(u.discriminator).padStart(4,'0')}</div>
+                </div>
+              </button>
+            ))}
+            {!searching && search && searchResults.length === 0 && (
+              <div className="text-xs text-gray-500">No users found</div>
+            )}
           </div>
         </div>
       </div>
@@ -783,7 +819,7 @@ function App() {
               {/* Content area */}
               <div className="p-5">
                 <div className="flex items-start gap-4">
-                  <img src={defaultPfp} alt="Profile" className="h-10 w-10 rounded-full object-cover" />
+                  <img src={me?.avatarUrl || defaultPfp} onError={(e) => (e.currentTarget.src = defaultPfp)} alt="Profile" className="h-10 w-10 rounded-full object-cover" />
                   <div className="flex-1">
                     <textarea
                       value={postText}
@@ -893,6 +929,8 @@ function App() {
                       // Show location immediately even if server didn't echo it yet
                       const loc = (merged as any).location ?? (locationDraft.trim() || undefined);
                       setProfileUser((prev) => (prev ? { ...prev, bio: merged.bio, location: loc, avatarUrl: (merged as any).avatarUrl ?? prev.avatarUrl, bannerUrl: (merged as any).bannerUrl ?? prev.bannerUrl } : prev));
+                      // Also update `me` so composer uses the new avatar/banner instantly
+                      setMe((prev) => (prev ? { ...prev, avatarUrl: (merged as any).avatarUrl ?? prev.avatarUrl, bannerUrl: (merged as any).bannerUrl ?? prev.bannerUrl } : prev));
                       setShowEditProfile(false);
                     } catch (e: any) {
                       setSaveBioError(e?.message || 'Failed to save');

@@ -9,6 +9,39 @@ import path from 'path';
 const prisma = new PrismaClient();
 const router = Router();
 
+// GET /api/users/search?q=...&limit=&cursor= - search users by username
+router.get('/search', async (req, res, next) => {
+  try {
+    const { q = '', limit = '10' } = req.query as { q?: string; limit?: string };
+    const take = Math.min(Math.max(parseInt(limit || '10', 10), 1), 50);
+    const query = String(q || '').trim();
+    if (!query) return res.json({ items: [], nextCursor: null });
+
+    // Use raw SQL for case-insensitive search (PostgreSQL ILIKE)
+    const found = (await prisma.$queryRaw<any[]>`
+      SELECT id, username, discriminator, "avatarUrl", "createdAt"
+      FROM "User"
+      WHERE username ILIKE ${'%' + query + '%'}
+      ORDER BY username ASC
+      LIMIT ${take}
+    `) as any[];
+
+    let items = found.map((u) => ({
+      id: u.id,
+      username: u.username,
+      discriminator: u.discriminator,
+      avatarUrl: u.avatarUrl,
+      verified: u.username === 'benguin' && u.discriminator === 1,
+      createdAt: u.createdAt,
+    }));
+
+    // Simple response without cursor for now
+    res.json({ items, nextCursor: null });
+  } catch (e) {
+    next(e);
+  }
+});
+
 // GET /api/users/:username - basic profile
 router.get('/:username', async (req, res, next) => {
   try {

@@ -86,6 +86,16 @@ export async function apiUpdateMe(token: string, data: { bio?: string; location?
   return res.json();
 }
 
+export async function apiSearchUsers(q: string, limit = 10) {
+  const qsp = new URLSearchParams();
+  if (q) qsp.set('q', q);
+  if (limit) qsp.set('limit', String(limit));
+  qsp.set('_ts', String(Date.now()));
+  const res = await fetch(`${BASE_URL}/api/users/search?${qsp.toString()}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Search failed');
+  return res.json();
+}
+
 export async function apiUploadAvatar(token: string, dataUrl: string) {
   const res = await fetch(`${BASE_URL}/api/users/me/avatar`, {
     method: 'PATCH',

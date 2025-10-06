@@ -20,10 +20,28 @@ export const AuthService = {
     for (const u of existingForUsername) {
       if (u.discriminator === discriminator) discriminator++;
       else break;
-      if (discriminator > 9999) throw Object.assign(new Error('Username is full'), { status: 409 });
     }
+    if (discriminator > 9999) throw Object.assign(new Error('Username is full'), { status: 409 });
+
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await prisma.user.create({ data: { username, email, passwordHash, discriminator } });
+
+    // Race-safe create: if unique constraint hits, bump discriminator and retry
+    let user: any = null;
+    for (let attempts = 0; attempts < 50; attempts++) {
+      try {
+        if (discriminator > 9999) throw Object.assign(new Error('Username is full'), { status: 409 });
+        user = await prisma.user.create({ data: { username, email, passwordHash, discriminator } });
+        break;
+      } catch (e: any) {
+        // Prisma unique violation
+        if (e && e.code === 'P2002') {
+          discriminator += 1;
+          continue;
+        }
+        throw e;
+      }
+    }
+    if (!user) throw Object.assign(new Error('Could not allocate discriminator'), { status: 500 });
     const token = sign(user.id);
     return { token, user: { id: user.id, username: user.username, email: user.email, discriminator: user.discriminator } };
   },
