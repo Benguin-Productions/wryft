@@ -2,6 +2,20 @@ generator client {
   provider = "prisma-client-js"
 }
 
+model Follow {
+  id           String   @id @default(cuid())
+  followerId   String
+  followingId  String
+  createdAt    DateTime @default(now())
+
+  follower     User     @relation("follows", fields: [followerId], references: [id], onDelete: Cascade)
+  following    User     @relation("followedBy", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -28,6 +42,9 @@ model User {
   role         Role     @default(USER)
   // relations
   posts        Post[]
+  // follow relations
+  following    Follow[] @relation("follows")
+  followers    Follow[] @relation("followedBy")
 
   @@unique([username, discriminator])
 }

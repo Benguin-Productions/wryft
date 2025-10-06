@@ -1,5 +1,5 @@
 import { Search, Mail, Lock, X, Home, Bell, MessageCircle, User, Settings, SquarePen, MoreHorizontal } from 'lucide-react';
-import { apiMe, apiRegister, apiLogin, apiCreatePost, apiListPosts, apiGetUser, apiGetUserPosts, apiUpdateMe, apiUploadAvatar, apiUploadBanner, apiSearchUsers } from './api';
+import { apiMe, apiRegister, apiLogin, apiCreatePost, apiListPosts, apiGetUser, apiGetUserPosts, apiUpdateMe, apiUploadAvatar, apiUploadBanner, apiSearchUsers, apiFollow, apiUnfollow, apiFollowStats } from './api';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import loginImg from './login.png';
@@ -30,6 +30,12 @@ function App() {
     | null
     | { id: string; username: string; email: string; discriminator?: number; avatarUrl?: string; bannerUrl?: string }
   >(null);
+  // Follow stats for profile view
+  const [followStats, setFollowStats] = useState<{ followers: number; following: number; isFollowing: boolean } | null>(null);
+  // Search state (right sidebar)
+  const [search, setSearch] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<Array<{ id: string; username: string; discriminator: number; avatarUrl?: string }>>([]);
   // Invite help modal
   const [showInviteInfo, setShowInviteInfo] = useState(false);
   // Routing helpers
@@ -144,6 +150,51 @@ function App() {
       setView('profile');
     }
   }, [location.pathname]);
+
+  // Debounced user search
+  useEffect(() => {
+    let cancelled = false;
+    const term = search.trim();
+    if (!term) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await apiSearchUsers(term, 10);
+        if (!cancelled) setSearchResults(res.items || []);
+      } catch {
+        if (!cancelled) setSearchResults([]);
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [search]);
+
+  // Load follow stats when viewing a profile
+  useEffect(() => {
+    const uname = profileUser?.username || (routeUsername ?? undefined);
+    if (view !== 'profile' || !uname) {
+      setFollowStats(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const stats = await apiFollowStats(uname, token || undefined, profileUser?.discriminator);
+        if (!cancelled) setFollowStats(stats);
+      } catch {
+        if (!cancelled) setFollowStats({ followers: 0, following: 0, isFollowing: false });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [view, profileUser?.username, profileUser?.discriminator, routeUsername, token]);
 
   // Load my profile when switching to profile view
   useEffect(() => {
@@ -605,7 +656,48 @@ function App() {
                           Edit profile
                         </button>
                       ) : (
-                        <button className="px-4 py-2 rounded-lg bg-purple-700 hover:bg-purple-600 text-sm">Follow</button>
+                        <button
+                          disabled={!followStats}
+                          className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                            !followStats
+                              ? 'bg-black/30 border border-gray-800 text-gray-400 cursor-not-allowed'
+                              : followStats.isFollowing
+                                ? 'bg-black/40 border border-gray-800 hover:border-gray-700 text-white'
+                                : 'bg-purple-700 hover:bg-purple-600 text-white'
+                          }`}
+                          onClick={async () => {
+                            const uname = profileUser?.username || routeUsername;
+                            if (!uname) return;
+                            if (!token) {
+                              navigate('/login');
+                              return;
+                            }
+                            try {
+                              // optimistic update
+                              setFollowStats((prev) => {
+                                if (!prev) return { followers: 0, following: 0, isFollowing: true };
+                                return prev.isFollowing
+                                  ? { ...prev, isFollowing: false, followers: Math.max(0, prev.followers - 1) }
+                                  : { ...prev, isFollowing: true, followers: prev.followers + 1 };
+                              });
+                              if (followStats?.isFollowing) await apiUnfollow(token, uname, profileUser?.discriminator);
+                              else await apiFollow(token, uname, profileUser?.discriminator);
+                              // ensure alignment by refetching after success too
+                              try {
+                                const stats = await apiFollowStats(uname, token || undefined, profileUser?.discriminator);
+                                setFollowStats(stats);
+                              } catch {}
+                            } catch {
+                              // revert by refetching
+                              try {
+                                const stats = await apiFollowStats(uname, token || undefined, profileUser?.discriminator);
+                                setFollowStats(stats);
+                              } catch {}
+                            }
+                          }}
+                        >
+                          {!followStats ? '…' : followStats.isFollowing ? 'Unfollow' : 'Follow'}
+                        </button>
                       )}
                     </div>
                   </div>
@@ -621,10 +713,10 @@ function App() {
                     <div className="flex items-center gap-4 mt-3 text-sm">
                       <div className="text-gray-300"><span className="font-semibold text-white">{profilePosts.length}</span> Posts</div>
                       <button type="button" className="text-gray-500 hover:text-gray-300 underline underline-offset-2 cursor-pointer" onClick={() => setShowFollowing(true)} aria-label="View following list">
-                        0 Following
+                        {followStats ? `${followStats.following} Following` : 'Following'}
                       </button>
                       <button type="button" className="text-gray-500 hover:text-gray-300 underline underline-offset-2 cursor-pointer" onClick={() => setShowFollowers(true)} aria-label="View followers list">
-                        0 Followers
+                        {followStats ? `${followStats.followers} Followers` : 'Followers'}
                       </button>
                     </div>
                     {/* Tabs */}

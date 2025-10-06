@@ -121,3 +121,34 @@ export async function apiUploadBanner(token: string, dataUrl: string) {
   if (!res.ok) throw new Error((await res.json()).error || 'Upload banner failed');
   return res.json();
 }
+
+// Follow APIs
+export async function apiFollow(token: string, username: string, disc?: number) {
+  const q = disc != null ? `?disc=${encodeURIComponent(String(disc))}` : '';
+  const res = await fetch(`${BASE_URL}/api/users/${encodeURIComponent(username)}/follow${q}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Follow failed');
+  return res.json();
+}
+
+export async function apiUnfollow(token: string, username: string, disc?: number) {
+  const q = disc != null ? `?disc=${encodeURIComponent(String(disc))}` : '';
+  const res = await fetch(`${BASE_URL}/api/users/${encodeURIComponent(username)}/follow${q}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Unfollow failed');
+  return res.json();
+}
+
+export async function apiFollowStats(username: string, token?: string, disc?: number) {
+  const q = disc != null ? `?disc=${encodeURIComponent(String(disc))}` : '';
+  const res = await fetch(`${BASE_URL}/api/users/${encodeURIComponent(username)}/follow-stats${q}`, {
+    cache: 'no-store',
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  if (!res.ok) throw new Error('Fetch follow stats failed');
+  return res.json() as Promise<{ followers: number; following: number; isFollowing: boolean }>;
+}

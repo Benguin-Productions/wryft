@@ -2,12 +2,67 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { requireAuth } from '../shared/requireAuth';
+import { maybeAuth } from '../shared/maybeAuth';
 import { validate } from '../shared/validate';
 import fs from 'fs';
 import path from 'path';
 
 const prisma = new PrismaClient();
 const router = Router();
+
+// POST /api/users/:username/follow - follow a user
+router.post('/:username/follow', requireAuth, async (req: any, res, next) => {
+  try {
+    const { username } = req.params;
+    const discRaw = (req.query?.disc as string | undefined) || undefined;
+    const disc = discRaw ? parseInt(discRaw, 10) : undefined;
+    const target = await prisma.user.findFirst({ where: { username, ...(Number.isInteger(disc) ? { discriminator: disc } : {}) }, select: { id: true } });
+    if (!target) return res.status(404).json({ error: 'User not found' });
+    if (target.id === req.userId) return res.status(400).json({ error: 'Cannot follow yourself' });
+    await prisma.follow.create({ data: { followerId: req.userId!, followingId: target.id } }).catch((e: any) => {
+      // ignore unique constraint (already following)
+      if (!(e && e.code === 'P2002')) throw e;
+    });
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// DELETE /api/users/:username/follow - unfollow a user
+router.delete('/:username/follow', requireAuth, async (req: any, res, next) => {
+  try {
+    const { username } = req.params;
+    const discRaw = (req.query?.disc as string | undefined) || undefined;
+    const disc = discRaw ? parseInt(discRaw, 10) : undefined;
+    const target = await prisma.user.findFirst({ where: { username, ...(Number.isInteger(disc) ? { discriminator: disc } : {}) }, select: { id: true } });
+    if (!target) return res.status(404).json({ error: 'User not found' });
+    await prisma.follow.deleteMany({ where: { followerId: req.userId!, followingId: target.id } });
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// GET /api/users/:username/follow-stats - counts and relationship
+router.get('/:username/follow-stats', maybeAuth, async (req: any, res, next) => {
+  try {
+    const { username } = req.params;
+    const discRaw = (req.query?.disc as string | undefined) || undefined;
+    const disc = discRaw ? parseInt(discRaw, 10) : undefined;
+    const meId = req.userId || null; // works if requireAuth middleware isn't used
+    const user = await prisma.user.findFirst({ where: { username, ...(Number.isInteger(disc) ? { discriminator: disc } : {}) }, select: { id: true } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const [followers, following, isFollowing] = await Promise.all([
+      prisma.follow.count({ where: { followingId: user.id } }),
+      prisma.follow.count({ where: { followerId: user.id } }),
+      meId ? prisma.follow.findFirst({ where: { followerId: meId, followingId: user.id }, select: { id: true } }) : Promise.resolve(null),
+    ]);
+    res.json({ followers, following, isFollowing: Boolean(isFollowing) });
+  } catch (e) {
+    next(e);
+  }
+});
 
 // GET /api/users/search?q=...&limit=&cursor= - search users by username
 router.get('/search', async (req, res, next) => {
