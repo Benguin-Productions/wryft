@@ -13,15 +13,24 @@ router.post('/', requireAuth, async (req: any, res, next) => {
   try {
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Invalid content' });
-    const post = await prisma.post.create({
+    const created = await prisma.post.create({
       data: { content: parsed.data.content, authorId: req.userId! },
-      select: {
-        id: true,
-        content: true,
-        createdAt: true,
-        author: { select: { id: true, username: true, discriminator: true, verified: true, badgeIcon: true } },
-      },
+      select: { id: true, content: true, createdAt: true, author: true },
     });
+    const a = (created as any).author || {};
+    const post = {
+      id: created.id,
+      content: created.content,
+      createdAt: created.createdAt,
+      author: {
+        id: a.id,
+        username: a.username,
+        discriminator: a.discriminator,
+        verified: a.verified,
+        badgeIcon: a.badgeIcon,
+        avatarUrl: a.avatarUrl,
+      },
+    };
     res.status(201).json(post);
   } catch (e) {
     next(e);
@@ -34,17 +43,25 @@ router.get('/', async (req, res, next) => {
     const limit = Math.min(Number(req.query.limit) || 20, 50);
     const cursor = req.query.cursor as string | undefined;
 
-    const items = await prisma.post.findMany({
+    const found = await prisma.post.findMany({
       take: limit + 1,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        content: true,
-        createdAt: true,
-        author: { select: { id: true, username: true, discriminator: true, verified: true, badgeIcon: true } },
-      },
+      select: { id: true, content: true, createdAt: true, author: true },
     });
+    const items = (found as any[]).map((p) => ({
+      id: p.id,
+      content: p.content,
+      createdAt: p.createdAt,
+      author: {
+        id: p.author?.id,
+        username: p.author?.username,
+        discriminator: p.author?.discriminator,
+        verified: p.author?.verified,
+        badgeIcon: p.author?.badgeIcon,
+        avatarUrl: p.author?.avatarUrl,
+      },
+    }));
 
     let nextCursor: string | null = null;
     if (items.length > limit) {

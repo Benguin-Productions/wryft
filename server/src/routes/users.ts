@@ -13,13 +13,11 @@ const router = Router();
 router.get('/:username', async (req, res, next) => {
   try {
     const { username } = req.params;
-    const user = await prisma.user.findFirst({
-      where: { username },
-      select: { id: true, username: true, discriminator: true, bio: true, createdAt: true, avatarUrl: true, bannerUrl: true },
-    });
+    const user = await prisma.user.findFirst({ where: { username } });
     if (!user) return res.status(404).json({ error: 'User not found' });
-    const verified = user.username === 'benguin' && user.discriminator === 1;
-    res.json({ ...user, verified });
+    const { id, username: uname, discriminator, bio, createdAt, avatarUrl, bannerUrl } = user as any;
+    const verified = uname === 'benguin' && discriminator === 1;
+    res.json({ id, username: uname, discriminator, bio, createdAt, avatarUrl, bannerUrl, verified });
   } catch (e) {
     next(e);
   }
@@ -28,15 +26,16 @@ router.get('/:username', async (req, res, next) => {
 // PATCH /api/users/me - update own profile (bio only for now)
 const updateMeSchema = z.object({
   bio: z.string().max(280).optional(),
+  location: z.string().max(80).optional(),
 });
 
 router.patch('/me', requireAuth, validate(updateMeSchema), async (req: any, res, next) => {
   try {
-    const { bio } = req.body as { bio?: string };
+    const { bio, location } = req.body as { bio?: string; location?: string };
     const updated = await prisma.user.update({
       where: { id: req.userId },
       data: { bio: bio ?? null },
-      select: { id: true, username: true, discriminator: true, bio: true, createdAt: true, avatarUrl: true, bannerUrl: true },
+      select: { id: true, username: true, discriminator: true, bio: true, createdAt: true },
     });
     const verified = updated.username === 'benguin' && updated.discriminator === 1;
     res.json({ ...updated, verified });
@@ -81,10 +80,10 @@ router.patch('/me/avatar', requireAuth, validate(dataUrlSchema), async (req: any
     const updated = await prisma.user.update({
       where: { id: req.userId },
       data: { avatarUrl: url },
-      select: { id: true, username: true, discriminator: true, bio: true, createdAt: true, avatarUrl: true, bannerUrl: true },
+      select: { id: true, username: true, discriminator: true, bio: true, createdAt: true },
     });
     const verified = updated.username === 'benguin' && updated.discriminator === 1;
-    res.json({ ...updated, verified });
+    res.json({ ...updated, avatarUrl: url, verified });
   } catch (e) {
     next(e);
   }
@@ -104,10 +103,10 @@ router.patch('/me/banner', requireAuth, validate(dataUrlSchema), async (req: any
     const updated = await prisma.user.update({
       where: { id: req.userId },
       data: { bannerUrl: url },
-      select: { id: true, username: true, discriminator: true, bio: true, createdAt: true, avatarUrl: true, bannerUrl: true },
+      select: { id: true, username: true, discriminator: true, bio: true, createdAt: true },
     });
     const verified = updated.username === 'benguin' && updated.discriminator === 1;
-    res.json({ ...updated, verified });
+    res.json({ ...updated, bannerUrl: url, verified });
   } catch (e) {
     next(e);
   }
@@ -123,24 +122,24 @@ router.get('/:username/posts', async (req, res, next) => {
     const user = await prisma.user.findFirst({ where: { username }, select: { id: true } });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const items = await prisma.post.findMany({
+    const found = await prisma.post.findMany({
       where: { authorId: user.id },
       take: take + 1,
       ...(cursor ? { cursor: { id: String(cursor) }, skip: 1 } : {}),
       orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        content: true,
-        createdAt: true,
-        author: { select: { id: true, username: true, discriminator: true, avatarUrl: true } },
-      },
+      select: { id: true, content: true, createdAt: true, author: true },
     });
 
-    const withBadges = items.map((p: any) => ({
-      ...p,
+    const withBadges = (found as any[]).map((p) => ({
+      id: p.id,
+      content: p.content,
+      createdAt: p.createdAt,
       author: {
-        ...p.author,
-        verified: p.author.username === 'benguin' && p.author.discriminator === 1,
+        id: p.author?.id,
+        username: p.author?.username,
+        discriminator: p.author?.discriminator,
+        avatarUrl: p.author?.avatarUrl,
+        verified: p.author?.username === 'benguin' && p.author?.discriminator === 1,
       },
     }));
 

@@ -24,6 +24,7 @@ model User {
   badgeIcon    String?
   avatarUrl    String?
   bannerUrl    String?
+  location     String?
   role         Role     @default(USER)
   // relations
   posts        Post[]

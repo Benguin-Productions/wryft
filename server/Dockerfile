@@ -16,11 +16,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install dependencies (include dev deps for build)
 RUN npm ci || npm install --no-audit --no-fund
 
-# Generate Prisma Client
+# Generate Prisma Client (first pass, based on prisma/)
 RUN npx prisma generate
 
-# Copy source code
+# Copy source code (may include updated prisma/schema.prisma)
 COPY . .
+
+# Regenerate Prisma Client after copying full source to ensure types are up-to-date
+RUN npx prisma generate
 
 # Build TypeScript
 RUN npm run build

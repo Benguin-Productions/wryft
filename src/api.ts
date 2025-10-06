@@ -73,7 +73,7 @@ export async function apiListPosts(params?: { limit?: number; cursor?: string })
   return res.json();
 }
 
-export async function apiUpdateMe(token: string, data: { bio?: string }) {
+export async function apiUpdateMe(token: string, data: { bio?: string; location?: string }) {
   const res = await fetch(`${BASE_URL}/api/users/me`, {
     method: 'PATCH',
     headers: {

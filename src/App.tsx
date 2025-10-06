@@ -74,6 +74,7 @@ function App() {
         createdAt: string;
         avatarUrl?: string;
         bannerUrl?: string;
+        location?: string;
       }
   >(null);
   const [profilePosts, setProfilePosts] = useState<
@@ -85,6 +86,7 @@ function App() {
   // Edit profile modal state
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [bioDraft, setBioDraft] = useState('');
+  const [locationDraft, setLocationDraft] = useState('');
   const [savingBio, setSavingBio] = useState(false);
   const [saveBioError, setSaveBioError] = useState<string | null>(null);
   // Profile editor previews (UI-only for now)
@@ -586,6 +588,7 @@ function App() {
                           onClick={() => {
                             setSaveBioError(null);
                             setBioDraft(profileUser?.bio || '');
+                            setLocationDraft(profileUser?.location || '');
                             setBannerPreview(profileUser?.bannerUrl || null);
                             setAvatarPreview(profileUser?.avatarUrl || null);
                             setShowEditProfile(true);
@@ -885,9 +888,11 @@ function App() {
                       if (avatarPreview && avatarPreview.startsWith('data:')) {
                         current = await apiUploadAvatar(token, avatarPreview);
                       }
-                      const updated = await apiUpdateMe(token, { bio: bioDraft.trim() || undefined });
+                      const updated = await apiUpdateMe(token, { bio: bioDraft.trim() || undefined, location: locationDraft.trim() || undefined });
                       const merged = current ? { ...updated, ...current } : updated;
-                      setProfileUser((prev) => (prev ? { ...prev, bio: merged.bio, avatarUrl: merged.avatarUrl ?? prev.avatarUrl, bannerUrl: merged.bannerUrl ?? prev.bannerUrl } : prev));
+                      // Show location immediately even if server didn't echo it yet
+                      const loc = (merged as any).location ?? (locationDraft.trim() || undefined);
+                      setProfileUser((prev) => (prev ? { ...prev, bio: merged.bio, location: loc, avatarUrl: (merged as any).avatarUrl ?? prev.avatarUrl, bannerUrl: (merged as any).bannerUrl ?? prev.bannerUrl } : prev));
                       setShowEditProfile(false);
                     } catch (e: any) {
                       setSaveBioError(e?.message || 'Failed to save');
@@ -1006,6 +1011,14 @@ function App() {
                   <span>{bioDraft.length}/280</span>
                   {saveBioError && <span className="text-red-400">{saveBioError}</span>}
                 </div>
+                {/* Location */}
+                <label className="block text-xs text-gray-400 mt-4 mb-1">Location</label>
+                <input
+                  value={locationDraft}
+                  onChange={(e) => setLocationDraft(e.target.value.slice(0, 80))}
+                  placeholder="Add your location"
+                  className="w-full bg-[#121212] border border-gray-800 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-gray-700"
+                />
               </div>
             </div>
           </div>
