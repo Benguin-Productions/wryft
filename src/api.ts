@@ -15,6 +15,26 @@ export async function apiRegister(data: { username: string; email: string; passw
   return res.json();
 }
 
+export async function apiListFollowers(username: string, opts?: { limit?: number; disc?: number }) {
+  const q = new URLSearchParams();
+  if (opts?.limit) q.set('limit', String(opts.limit));
+  if (opts?.disc != null) q.set('disc', String(opts.disc));
+  q.set('_ts', String(Date.now()));
+  const res = await fetch(`${BASE_URL}/api/users/${encodeURIComponent(username)}/followers?${q.toString()}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Fetch followers failed');
+  return res.json() as Promise<{ items: Array<{ id: string; username: string; discriminator: number; avatarUrl?: string }>; nextCursor: string | null }>;
+}
+
+export async function apiListFollowing(username: string, opts?: { limit?: number; disc?: number }) {
+  const q = new URLSearchParams();
+  if (opts?.limit) q.set('limit', String(opts.limit));
+  if (opts?.disc != null) q.set('disc', String(opts.disc));
+  q.set('_ts', String(Date.now()));
+  const res = await fetch(`${BASE_URL}/api/users/${encodeURIComponent(username)}/following?${q.toString()}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Fetch following failed');
+  return res.json() as Promise<{ items: Array<{ id: string; username: string; discriminator: number; avatarUrl?: string }>; nextCursor: string | null }>;
+}
+
 export async function apiGetUser(username: string) {
   const res = await fetch(`${BASE_URL}/api/users/${encodeURIComponent(username)}`, { cache: 'no-store' });
   if (!res.ok) throw new Error('Fetch user failed');

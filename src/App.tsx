@@ -1,5 +1,5 @@
 import { Search, Mail, Lock, X, Home, Bell, MessageCircle, User, Settings, SquarePen, MoreHorizontal } from 'lucide-react';
-import { apiMe, apiRegister, apiLogin, apiCreatePost, apiListPosts, apiGetUser, apiGetUserPosts, apiUpdateMe, apiUploadAvatar, apiUploadBanner, apiSearchUsers, apiFollow, apiUnfollow, apiFollowStats } from './api';
+import { apiMe, apiRegister, apiLogin, apiCreatePost, apiListPosts, apiGetUser, apiGetUserPosts, apiUpdateMe, apiUploadAvatar, apiUploadBanner, apiSearchUsers, apiFollow, apiUnfollow, apiFollowStats, apiListFollowers, apiListFollowing } from './api';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import loginImg from './login.png';
@@ -106,6 +106,12 @@ function App() {
   // Verified info modal (UI-only)
   const [showVerifiedInfo, setShowVerifiedInfo] = useState(false);
 
+  // Followers/Following data for modals
+  const [followersLoading, setFollowersLoading] = useState(false);
+  const [followingLoading, setFollowingLoading] = useState(false);
+  const [followersList, setFollowersList] = useState<Array<{ id: string; username: string; discriminator: number; avatarUrl?: string }>>([]);
+  const [followingList, setFollowingList] = useState<Array<{ id: string; username: string; discriminator: number; avatarUrl?: string }>>([]);
+
   const fetchFeed = useCallback(async () => {
     try {
       setFeedError(null);
@@ -176,6 +182,44 @@ function App() {
       clearTimeout(t);
     };
   }, [search]);
+
+  // Load followers list when modal opens
+  useEffect(() => {
+    const uname = profileUser?.username || routeUsername;
+    if (!showFollowers || !uname) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setFollowersLoading(true);
+        const res = await apiListFollowers(uname, { limit: 50, disc: profileUser?.discriminator });
+        if (!cancelled) setFollowersList(res.items || []);
+      } catch {
+        if (!cancelled) setFollowersList([]);
+      } finally {
+        if (!cancelled) setFollowersLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [showFollowers, profileUser?.username, profileUser?.discriminator, routeUsername]);
+
+  // Load following list when modal opens
+  useEffect(() => {
+    const uname = profileUser?.username || routeUsername;
+    if (!showFollowing || !uname) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setFollowingLoading(true);
+        const res = await apiListFollowing(uname, { limit: 50, disc: profileUser?.discriminator });
+        if (!cancelled) setFollowingList(res.items || []);
+      } catch {
+        if (!cancelled) setFollowingList([]);
+      } finally {
+        if (!cancelled) setFollowingLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [showFollowing, profileUser?.username, profileUser?.discriminator, routeUsername]);
 
   // Load follow stats when viewing a profile
   useEffect(() => {
@@ -1166,7 +1210,25 @@ function App() {
               </button>
               <div className="p-5">
                 <h3 className="text-lg font-semibold mb-3">Following</h3>
-                <div className="text-sm text-gray-400">No following yet.</div>
+                {followingLoading ? (
+                  <div className="text-sm text-gray-400">Loading…</div>
+                ) : followingList.length === 0 ? (
+                  <div className="text-sm text-gray-400">No following yet.</div>
+                ) : (
+                  <div className="space-y-3">
+                    {followingList.map((u) => (
+                      <button key={u.id} className="w-full text-left" onClick={() => { navigate(`/u/${u.username}`); setShowFollowing(false); }}>
+                        <div className="flex items-center gap-3 rounded-lg border border-gray-800 bg-black/20 px-3 py-2 hover:border-gray-700 transition-colors">
+                          <img src={u.avatarUrl || defaultPfp} onError={(e) => (e.currentTarget.src = defaultPfp)} alt="Avatar" className="h-8 w-8 rounded-full object-cover" />
+                          <div>
+                            <div className="text-sm text-white font-semibold">{u.username}</div>
+                            <div className="text-xs text-gray-500">@{u.username}{typeof u.discriminator === 'number' ? `#${String(u.discriminator).padStart(4,'0')}` : ''}</div>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1184,7 +1246,25 @@ function App() {
               </button>
               <div className="p-5">
                 <h3 className="text-lg font-semibold mb-3">Followers</h3>
-                <div className="text-sm text-gray-400">No followers yet.</div>
+                {followersLoading ? (
+                  <div className="text-sm text-gray-400">Loading…</div>
+                ) : followersList.length === 0 ? (
+                  <div className="text-sm text-gray-400">No followers yet.</div>
+                ) : (
+                  <div className="space-y-3">
+                    {followersList.map((u) => (
+                      <button key={u.id} className="w-full text-left" onClick={() => { navigate(`/u/${u.username}`); setShowFollowers(false); }}>
+                        <div className="flex items-center gap-3 rounded-lg border border-gray-800 bg-black/20 px-3 py-2 hover:border-gray-700 transition-colors">
+                          <img src={u.avatarUrl || defaultPfp} onError={(e) => (e.currentTarget.src = defaultPfp)} alt="Avatar" className="h-8 w-8 rounded-full object-cover" />
+                          <div>
+                            <div className="text-sm text-white font-semibold">{u.username}</div>
+                            <div className="text-xs text-gray-500">@{u.username}{typeof u.discriminator === 'number' ? `#${String(u.discriminator).padStart(4,'0')}` : ''}</div>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>

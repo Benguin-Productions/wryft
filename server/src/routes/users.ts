@@ -29,6 +29,60 @@ router.post('/:username/follow', requireAuth, async (req: any, res, next) => {
   }
 });
 
+// GET /api/users/:username/followers?limit=&disc=
+router.get('/:username/followers', async (req: any, res, next) => {
+  try {
+    const { username } = req.params;
+    const discRaw = (req.query?.disc as string | undefined) || undefined;
+    const disc = discRaw ? parseInt(discRaw, 10) : undefined;
+    const limit = Math.min(Math.max(parseInt((req.query?.limit as string) || '20', 10), 1), 50);
+    const user = await prisma.user.findFirst({ where: { username, ...(Number.isInteger(disc) ? { discriminator: disc } : {}) }, select: { id: true } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const rows = await prisma.follow.findMany({
+      where: { followingId: user.id },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: { follower: { select: { id: true, username: true, discriminator: true, avatarUrl: true } } },
+    });
+    const items = rows.map((r: any) => ({
+      id: r.follower.id,
+      username: r.follower.username,
+      discriminator: r.follower.discriminator,
+      avatarUrl: r.follower.avatarUrl || null,
+    }));
+    res.json({ items, nextCursor: null });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// GET /api/users/:username/following?limit=&disc=
+router.get('/:username/following', async (req: any, res, next) => {
+  try {
+    const { username } = req.params;
+    const discRaw = (req.query?.disc as string | undefined) || undefined;
+    const disc = discRaw ? parseInt(discRaw, 10) : undefined;
+    const limit = Math.min(Math.max(parseInt((req.query?.limit as string) || '20', 10), 1), 50);
+    const user = await prisma.user.findFirst({ where: { username, ...(Number.isInteger(disc) ? { discriminator: disc } : {}) }, select: { id: true } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const rows = await prisma.follow.findMany({
+      where: { followerId: user.id },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: { following: { select: { id: true, username: true, discriminator: true, avatarUrl: true } } },
+    });
+    const items = rows.map((r: any) => ({
+      id: r.following.id,
+      username: r.following.username,
+      discriminator: r.following.discriminator,
+      avatarUrl: r.following.avatarUrl || null,
+    }));
+    res.json({ items, nextCursor: null });
+  } catch (e) {
+    next(e);
+  }
+});
+
 // DELETE /api/users/:username/follow - unfollow a user
 router.delete('/:username/follow', requireAuth, async (req: any, res, next) => {
   try {
