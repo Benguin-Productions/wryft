@@ -26,6 +26,12 @@ enum Role {
   ADMIN
 }
 
+enum NotificationType {
+  DM
+  REPLY
+  FOLLOWED_POST
+}
+
 model User {
   id           String   @id @default(cuid())
   username     String
@@ -45,6 +51,12 @@ model User {
   // follow relations
   following    Follow[] @relation("follows")
   followers    Follow[] @relation("followedBy")
+  notifications Notification[]
+  // inverse side for Notification.actor
+  actorNotifications Notification[] @relation("NotificationActor")
+  // chat inverse relations
+  conversationParticipants ConversationParticipant[] @relation("ParticipantUser")
+  sentMessages             Message[]                  @relation("MessageSender")
 
   @@unique([username, discriminator])
 }
@@ -55,8 +67,16 @@ model Post {
   createdAt DateTime @default(now())
   authorId  String
   author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  // replies
+  parentId  String?
+  parent    Post?    @relation("PostToReplies", fields: [parentId], references: [id])
+  replies   Post[]   @relation("PostToReplies")
+  // inverse side for Notification.post
+  notifications Notification[]
 
   @@index([createdAt])
+  @@index([authorId])
+  @@index([parentId])
 }
 
 model InviteCode {
@@ -67,4 +87,82 @@ model InviteCode {
   expiresAt  DateTime?
   createdAt  DateTime @default(now())
   disabled   Boolean  @default(false)
+}
+
+model Notification {
+  id        String            @id @default(cuid())
+  userId    String
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  actorId   String
+  actor     User              @relation("NotificationActor", fields: [actorId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  postId    String?
+  post      Post?             @relation(fields: [postId], references: [id])
+  conversationId String?
+  messageId String?
+  readAt    DateTime?
+  createdAt DateTime          @default(now())
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+}
+
+// Chats
+model Conversation {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@index([updatedAt])
+}
+
+model ConversationParticipant {
+  id             String   @id @default(cuid())
+  conversationId String
+  userId         String
+  lastReadMsgId  String?
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation("ParticipantUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id              String   @id @default(cuid())
+  conversationId  String
+  senderUserId    String
+  createdAt       DateTime @default(now())
+  // encrypted body (AES-256-GCM)
+  bodyCt          Bytes
+  bodyIv          Bytes
+  bodyTag         Bytes
+  bodyAlgo        String   @default("aes-256-gcm")
+  hasAttachments  Boolean  @default(false)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation("MessageSender", fields: [senderUserId], references: [id], onDelete: Cascade)
+  attachments  Attachment[]
+
+  @@index([conversationId, createdAt])
+}
+
+model Attachment {
+  id         String   @id @default(cuid())
+  messageId  String
+  objectKey  String
+  size       Int
+  mime       String
+  // encrypted blob layout: [IV(12)|CT|TAG(16)] stored as file; we keep algo for future
+  algo       String   @default("aes-256-gcm")
+  createdAt  DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
 }

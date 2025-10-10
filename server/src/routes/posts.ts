@@ -1,20 +1,24 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, NotificationType } from '@prisma/client';
 import { requireAuth } from '../shared/requireAuth';
 import { z } from 'zod';
 
 const prisma = new PrismaClient();
 const router = Router();
 
-const createSchema = z.object({ content: z.string().min(1).max(1000) });
+const createSchema = z.object({
+  content: z.string().min(1).max(1000),
+  parentId: z.string().min(1).optional(),
+});
 
 // Create a post
 router.post('/', requireAuth, async (req: any, res, next) => {
   try {
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Invalid content' });
+    const { content, parentId } = parsed.data;
     const created = await prisma.post.create({
-      data: { content: parsed.data.content, authorId: req.userId! },
+      data: { content, authorId: req.userId!, parentId: parentId || undefined },
       select: { id: true, content: true, createdAt: true, author: true },
     });
     const a = (created as any).author || {};
@@ -31,6 +35,42 @@ router.post('/', requireAuth, async (req: any, res, next) => {
         avatarUrl: a.avatarUrl,
       },
     };
+    // Emit notifications
+    try {
+      // Followed users' posts: notify all followers except self
+      const followers = await prisma.follow.findMany({
+        where: { followingId: req.userId! },
+        select: { followerId: true },
+      });
+      if (followers.length) {
+        await prisma.notification.createMany({
+          data: followers
+            .filter((f) => f.followerId !== req.userId)
+            .map((f) => ({
+              userId: f.followerId,
+              actorId: req.userId!,
+              type: NotificationType.FOLLOWED_POST,
+              postId: created.id,
+            })),
+          skipDuplicates: true,
+        });
+      }
+      // Reply: notify parent author
+      if (parentId) {
+        const parent = await prisma.post.findUnique({ where: { id: parentId }, select: { authorId: true } });
+        if (parent && parent.authorId !== req.userId) {
+          await prisma.notification.create({
+            data: {
+              userId: parent.authorId,
+              actorId: req.userId!,
+              type: NotificationType.REPLY,
+              postId: created.id,
+            },
+          });
+        }
+      }
+    } catch {}
+
     res.status(201).json(post);
   } catch (e) {
     next(e);

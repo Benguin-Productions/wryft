@@ -4,7 +4,7 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-export const AuthService = {
+const AuthService = {
   async register({ username, email, password }: { username: string; email: string; password: string }) {
     // email must be unique
     const emailExisting = await prisma.user.findUnique({ where: { email } });
@@ -55,6 +55,9 @@ export const AuthService = {
     return { token, user: { id: user.id, username: user.username, email: user.email, discriminator: user.discriminator } };
   }
 };
+
+export { AuthService };
+export default AuthService;
 
 function sign(userId: string) {
   return jwt.sign({ sub: userId }, process.env.JWT_SECRET || 'devsecret', { expiresIn: '7d' });

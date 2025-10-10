@@ -8,6 +8,41 @@ import wryftLogo from './wryft.png';
 import defaultPfp from './default_pfp.png';
 import verifiedIcon from './verified.png';
 
+// Local hook: keeps a component mounted during exit to allow fade-out animations
+function useFadeMount(isOpen: boolean, durationMs = 150) {
+  const [mounted, setMounted] = useState(isOpen);
+  const [animClass, setAnimClass] = useState<string>(isOpen ? 'fade-enter' : '');
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setMounted(true);
+      // reliable enter: double rAF to ensure initial style commit then transition to enter
+      setAnimClass('');
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setAnimClass('fade-enter');
+        });
+      });
+    } else if (mounted) {
+      setAnimClass('fade-exit');
+      if (timerRef.current) window.clearTimeout(timerRef.current);
+      timerRef.current = window.setTimeout(() => {
+        setMounted(false);
+        setAnimClass('');
+      }, durationMs) as unknown as number;
+    }
+    return () => {
+      if (timerRef.current) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [isOpen, mounted, durationMs]);
+
+  return { mounted, animClass } as const;
+}
+
 // Simple time-ago helper for timestamps
 function timeAgo(iso: string) {
   const d = new Date(iso);
@@ -60,6 +95,8 @@ function App() {
   const [postText, setPostText] = useState('');
   // Splash screen
   const [showSplash, setShowSplash] = useState(true);
+  // Fade helpers for modals
+  const { mounted: postMounted, animClass: postAnim } = useFadeMount(showPostModal, 180);
   // Feed state
   const [posts, setPosts] = useState<
     Array<{ id: string; content: string; createdAt: string; author: { id: string; username: string; discriminator?: number; avatarUrl?: string } }>
@@ -105,6 +142,10 @@ function App() {
   const [showFollowing, setShowFollowing] = useState(false);
   // Verified info modal (UI-only)
   const [showVerifiedInfo, setShowVerifiedInfo] = useState(false);
+
+  // Fade helpers for other modals (declare AFTER their state to avoid TDZ issues)
+  const { mounted: inviteMounted, animClass: inviteAnim } = useFadeMount(showInviteInfo, 180);
+  const { mounted: editMounted, animClass: editAnim } = useFadeMount(showEditProfile, 180);
 
   // Followers/Following data for modals
   const [followersLoading, setFollowersLoading] = useState(false);
@@ -687,7 +728,7 @@ function App() {
                     <div className="pt-4">
                       {(profileUser == null || profileUser?.username === me?.username) ? (
                         <button
-                          className="px-4 py-2 rounded-lg bg-black/40 border border-gray-800 hover:border-gray-700 text-sm"
+                          className="px-6 py-3 rounded-2xl bg-[#2a1b47] hover:bg-[#34205a] text-purple-400 text-base font-semibold shadow-inner ring-1 ring-[#1b1234] transition-colors"
                           onClick={() => {
                             setSaveBioError(null);
                             setBioDraft(profileUser?.bio || '');
@@ -697,7 +738,7 @@ function App() {
                             setShowEditProfile(true);
                           }}
                         >
-                          Edit profile
+                          Edit Profile
                         </button>
                       ) : (
                         <button
@@ -942,8 +983,8 @@ function App() {
       </div>
 
       {/* New Post Modal */}
-      {showPostModal && (
-        <div className="fixed inset-0 z-50">
+      {postMounted && (
+        <div className={`fixed inset-0 z-50 fade-base ${postAnim}`}>
           {/* Overlay */}
           <div className="absolute inset-0 bg-black/60" onClick={() => setShowPostModal(false)} />
           {/* Centered Card */}
@@ -1006,8 +1047,8 @@ function App() {
       )}
 
       {/* Invite Info Modal */}
-      {showInviteInfo && (
-        <div className="fixed inset-0 z-[55]">
+      {inviteMounted && (
+        <div className={`fixed inset-0 z-[55] fade-base ${inviteAnim}`}>
           <div className="absolute inset-0 bg-black/60" onClick={() => setShowInviteInfo(false)} />
           <div className="absolute inset-0 flex items-center justify-center p-4" onClick={() => setShowInviteInfo(false)}>
             <div
@@ -1031,8 +1072,8 @@ function App() {
       )}
 
       {/* Edit Profile Modal (root-level overlay) */}
-      {showEditProfile && (
-        <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true">
+      {editMounted && (
+        <div className={`fixed inset-0 z-[70] fade-base ${editAnim}`} role="dialog" aria-modal="true">
           <div className="absolute inset-0 bg-black/60" onClick={() => setShowEditProfile(false)} />
           <div className="absolute inset-0 flex items-center justify-center p-4" onClick={() => setShowEditProfile(false)}>
             <div className="relative w-full max-w-2xl rounded-2xl bg-[#0b0b0b] border border-[#1b1b1b] shadow-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>

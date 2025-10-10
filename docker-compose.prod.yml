@@ -51,6 +51,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       API_URL: /api
       REDIS_URL: redis://redis:6379
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
     networks:
       - app-network
     # No bind mounts in production; use the built image

@@ -1,3 +1,6 @@
+/* Import Inter Semibold (must come before all other rules) */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -10,11 +13,41 @@
 .no-scrollbar::-webkit-scrollbar {
   display: none; /* Chrome, Safari, Opera */
 }
-
-/* Import Inter Semibold */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap');
-
 /* Utility to apply Inter font family */
 .font-inter {
   font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+}
+
+/* Splash animations */
+@keyframes fadeInUp {
+  0% { opacity: 0; transform: translateY(12px) scale(0.98); }
+  60% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes pumpkinFall {
+  0% { transform: translateY(-10%) translateX(0) rotate(0deg); opacity: 0; }
+  10% { opacity: 0.8; }
+  100% { transform: translateY(110%) translateX(20px) rotate(20deg); opacity: 0; }
+}
+.animate-fadeInUp {
+  animation: fadeInUp 420ms ease-out forwards;
+}
+.pumpkin-fall {
+  animation: pumpkinFall var(--fall-dur, 6s) linear var(--fall-delay, 0s) infinite;
+  will-change: transform, opacity;
+}
+
+/* Generic fade enter/exit for menus & modals */
+.fade-base {
+  opacity: 0;
+  transform: translateY(8px) scale(0.99);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+.fade-enter {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+.fade-exit {
+  opacity: 0;
+  transform: translateY(8px) scale(0.99);
 }
